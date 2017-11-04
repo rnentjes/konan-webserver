@@ -3,8 +3,8 @@ package nl.astraeus.konan.server.buffer
 import kotlin.IllegalStateException
 
 val BUFFER_COUNT: Int = 1024
-val BUFFER_SIZE: Int = 64
-val MINIMAL_REMAINING: Int = 32
+val BUFFER_SIZE: Int = 8192
+val MINIMAL_REMAINING: Int = 512
 
 class BufferBlock(
   var claimIndex: Int = 0,
@@ -33,6 +33,12 @@ class BufferBlock(
         if (data.isEmpty()) {
             println("Allocating buffer!")
             data = ByteArray(BUFFER_SIZE)
+        }
+    }
+
+    fun free() {
+        if (length == 0) {
+            data = ByteArray(0)
         }
     }
 
@@ -93,6 +99,15 @@ class Buffer  {
     val blocks: MutableList<BufferBlock> = ArrayList()
     var currentReadBlock: Int = -1
     var currentWriteBlock: Int = -1
+
+    fun clear() {
+        for (block in blocks) {
+            Buffers.free(block)
+        }
+        blocks.clear()
+        currentReadBlock = -1
+        currentWriteBlock = -1
+    }
 
     fun currentReadBlock(): BufferBlock {
         if (currentWriteBlock == -1) {

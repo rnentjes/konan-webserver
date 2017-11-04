@@ -4,7 +4,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/KotlinCMakeModule)
 
 project(webserver Kotlin)
 
-
 set(BUFFERS_SRC "src/common" "src/buffers")
 
 konanc_executable(

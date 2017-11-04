@@ -19,6 +19,8 @@ import platform.posix.*
 import kotlin.coroutines.experimental.*
 import kotlin.coroutines.experimental.intrinsics.*
 import nl.astraeus.konan.server.buffer.Buffer
+import nl.astraeus.konan.server.Connection
+import nl.astraeus.konan.server.RequestStatus
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -33,7 +35,6 @@ fun main(args: Array<String>) {
 
 fun startServer(port: Short) {
     memScoped {
-
         val serverAddr = alloc<sockaddr_in>()
 
         val listenFd = socket(AF_INET, SOCK_STREAM, 0)
@@ -57,15 +58,15 @@ fun startServer(port: Short) {
 
         var connectionId = 0
         acceptClientsAndRun(listenFd) {
-            val connectionIdString = "#${++connectionId}: ".cstr
+            val connectionIdString = "#${++connectionId} - request handled.".cstr
             val pinnedBytes = connectionIdString.getBytes().pin()
 
-            val buffer = Buffer()
+            val connection = Connection(connectionId)
 
             try {
                 while (true) {
-                    val currentBlock = buffer.currentWriteBlock(true)
-                    println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
+                    val currentBlock = connection.request.getRequestBlock()
+                    //println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
 
                     val bufferTest = currentBlock.data
                     val pinned = bufferTest.pin()
@@ -78,13 +79,14 @@ fun startServer(port: Short) {
                             break
                         }
 
-                        while(currentBlock.canRead()) {
-                            val value = currentBlock.read()
-                            println("READ: [${value.toChar()}] - $value")
-                        }
+                        connection.handleRead()
 
-                        write(pinnedBytes.addressOf(0), connectionIdString.size.toLong())
-                        write(pinned.addressOf(0), length)
+                        if (connection.request.status == RequestStatus.DONE) {
+                            write(pinnedBytes.addressOf(0), connectionIdString.size.toLong())
+                            write(pinned.addressOf(0), length)
+
+                            connection.reset()
+                        }
                     } finally {
                         pinned.unpin()
                     }
@@ -110,7 +112,10 @@ sealed class WaitingFor {
                 val continuation: Continuation<Unit>) : WaitingFor()
 }
 
-class Client(val clientFd: Int, val waitingList: MutableMap<Int, WaitingFor>) {
+class Client(
+        val clientFd: Int,
+        val waitingList: MutableMap<Int, WaitingFor>
+) {
     suspend fun read(data: CArrayPointer<ByteVar>, dataLength: Long): Long {
         val length = read(clientFd, data, dataLength)
         if (length >= 0)
@@ -144,7 +149,10 @@ open class EmptyContinuation(override val context: CoroutineContext = EmptyCorou
     override fun resumeWithException(exception: Throwable) { throw exception }
 }
 
-fun acceptClientsAndRun(serverFd: Int, block: suspend Client.() -> Unit) {
+fun acceptClientsAndRun(
+        serverFd: Int,
+        block: suspend Client.() -> Unit
+) {
     memScoped {
         val waitingList = mutableMapOf<Int, WaitingFor>(serverFd to WaitingFor.Accept())
         val readfds = alloc<fd_set>()
