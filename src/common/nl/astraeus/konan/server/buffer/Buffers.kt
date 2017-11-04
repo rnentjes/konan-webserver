@@ -2,8 +2,9 @@ package nl.astraeus.konan.server.buffer
 
 import kotlin.IllegalStateException
 
-val BUFFER_COUNT: Int = 256
-val BUFFER_SIZE: Int = 8192
+val BUFFER_COUNT: Int = 1024
+val BUFFER_SIZE: Int = 64
+val MINIMAL_REMAINING: Int = 32
 
 class BufferBlock(
   var claimIndex: Int = 0,
@@ -17,6 +18,24 @@ class BufferBlock(
 
     fun isFull() = !data.isEmpty() && length == data.size
 
+    fun remaining() = data.size - length
+
+    fun bytesRead(number: Int) {
+        length += number
+
+        if (length > data.size) {
+            println("Buffer size: ${data.size}, remaining(): ${remaining()}, bytes read: $number, length: $length")
+            throw IllegalStateException("To many bytes where read!?")
+        }
+    }
+
+    fun allocate() {
+        if (data.isEmpty()) {
+            println("Allocating buffer!")
+            data = ByteArray(BUFFER_SIZE)
+        }
+    }
+
     fun read(): Int {
         if (canRead()) {
             return data[index++].toInt() and 0xff
@@ -26,10 +45,7 @@ class BufferBlock(
     }
 
     fun write(value: Int): Boolean {
-        if (data.isEmpty()) {
-            println("Allocating buffer!")
-            data = ByteArray(BUFFER_SIZE)
-        }
+        allocate()
 
         if (canWrite()) {
             data[length++] = (value and 0xff).toByte()
@@ -78,13 +94,37 @@ class Buffer  {
     var currentReadBlock: Int = -1
     var currentWriteBlock: Int = -1
 
-    fun currentReadBlock() = blocks[currentReadBlock]
-    fun currentWriteBlock() = blocks[currentWriteBlock]
+    fun currentReadBlock(): BufferBlock {
+        if (currentWriteBlock == -1) {
+            blocks.add(Buffers.claim())
+            currentWriteBlock = 0
+            currentReadBlock = 0
+        }
+
+        return blocks[currentReadBlock]
+    }
+
+    fun currentWriteBlock(allocate: Boolean = false): BufferBlock {
+        if (currentWriteBlock == -1) {
+            blocks.add(Buffers.claim())
+            currentWriteBlock = 0
+            currentReadBlock = 0
+        } else if (!canWrite() || blocks[currentWriteBlock].remaining() < MINIMAL_REMAINING) {
+            blocks.add(Buffers.claim())
+            currentWriteBlock++
+        }
+
+        if (allocate) {
+            blocks[currentWriteBlock].allocate()
+        }
+
+        return blocks[currentWriteBlock]
+    }
 
     fun canRead() = currentReadBlock >= 0 &&
       (currentReadBlock < blocks.size - 1 || (currentReadBlock < blocks.size && currentReadBlock().canRead()))
 
-    fun canWrite() = currentWriteBlock == -1 || currentWriteBlock().canWrite() || Buffers.canClaim()
+    fun canWrite() = currentWriteBlock == -1 || blocks[currentWriteBlock].canWrite() || Buffers.canClaim()
 
     fun read(): Int {
         while(!currentReadBlock().canRead() && currentReadBlock < blocks.size - 1) {

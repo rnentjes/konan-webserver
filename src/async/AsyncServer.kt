@@ -18,6 +18,7 @@ import kotlinx.cinterop.*
 import platform.posix.*
 import kotlin.coroutines.experimental.*
 import kotlin.coroutines.experimental.intrinsics.*
+import nl.astraeus.konan.server.buffer.Buffer
 
 fun main(args: Array<String>) {
     if (args.isEmpty()) {
@@ -56,25 +57,42 @@ fun startServer(port: Short) {
 
         var connectionId = 0
         acceptClientsAndRun(listenFd) {
-            memScoped {
-                val bufferLength = 100L
-                val buffer = allocArray<ByteVar>(bufferLength)
-                val connectionIdString = "#${++connectionId}: ".cstr
-                val connectionIdBytes = connectionIdString.getPointer(this)
+            val connectionIdString = "#${++connectionId}: ".cstr
+            val pinnedBytes = connectionIdString.getBytes().pin()
 
-                try {
-                    while (true) {
-                        val length = read(buffer, bufferLength)
+            val buffer = Buffer()
 
-                        if (length == 0L)
+            try {
+                while (true) {
+                    val currentBlock = buffer.currentWriteBlock(true)
+                    println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
+
+                    val bufferTest = currentBlock.data
+                    val pinned = bufferTest.pin()
+
+                    try {
+                        val length = read(pinned.addressOf(currentBlock.index), currentBlock.remaining().signExtend())
+                        currentBlock.bytesRead(length.toInt())
+
+                        if (length == 0L) {
                             break
+                        }
 
-                        write(connectionIdBytes, connectionIdString.size.toLong())
-                        write(buffer, length)
+                        while(currentBlock.canRead()) {
+                            val value = currentBlock.read()
+                            println("READ: [${value.toChar()}] - $value")
+                        }
+
+                        write(pinnedBytes.addressOf(0), connectionIdString.size.toLong())
+                        write(pinned.addressOf(0), length)
+                    } finally {
+                        pinned.unpin()
                     }
-                } catch (e: IOException) {
-                    println("I/O error occured: ${e.message}")
                 }
+            } catch (e: IOException) {
+                println("I/O error occured: ${e.message}")
+            } finally {
+                pinnedBytes.unpin()
             }
         }
     }
