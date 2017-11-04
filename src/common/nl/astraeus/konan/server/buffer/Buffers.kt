@@ -88,6 +88,8 @@ object Buffers {
             buffer.claimIndex = claimCount
             claimList[claimCount++] = buffer
 
+            println("CLAIM: claimed: $claimCount, free: $freeCount, claimIndex: ${buffer.claimIndex}")
+
             buffer
         }
     }
@@ -97,6 +99,8 @@ object Buffers {
             freeList[freeCount++] = claimList[bufferBlock.claimIndex]
             claimList[bufferBlock.claimIndex] = claimList[claimCount - 1]
             claimCount--
+
+            println("FREE: claimed: $claimCount, free: $freeCount, claimIndex: ${bufferBlock.claimIndex}")
         }
     }
 }
