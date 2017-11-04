@@ -73,27 +73,31 @@ object Buffers {
     fun canClaim() = true
 
     fun claim(): BufferBlock {
-        if (freeCount == 0) {
-            val size = claimList.size
-            val newSize = size * 2
+        return synchronized(this) {
+            if (freeCount == 0) {
+                val size = claimList.size
+                val newSize = size * 2
 
-            val newClaimList = Array(newSize, { BufferBlock() })
-            val newFreeList = Array(newSize, { BufferBlock() })
+                val newClaimList = Array(newSize, { BufferBlock() })
+                val newFreeList = Array(newSize, { BufferBlock() })
 
-            TODO("Grow buffer list when full.")
+                TODO("Grow buffer list when full.")
+            }
+
+            val buffer = freeList[--freeCount]
+            buffer.claimIndex = claimCount
+            claimList[claimCount++] = buffer
+
+            buffer
         }
-
-        val buffer = freeList[--freeCount]
-        buffer.claimIndex = claimCount
-        claimList[claimCount++] = buffer
-
-        return buffer
     }
 
     fun free(bufferBlock: BufferBlock) {
-        freeList[freeCount++] = claimList[bufferBlock.claimIndex]
-        claimList[bufferBlock.claimIndex] = claimList[claimCount-1]
-        claimCount--
+        synchronized(this) {
+            freeList[freeCount++] = claimList[bufferBlock.claimIndex]
+            claimList[bufferBlock.claimIndex] = claimList[claimCount - 1]
+            claimCount--
+        }
     }
 }
 
