@@ -11,15 +11,6 @@ class Connection(
         request.handleRead()
 
         if (request.status == RequestStatus.DONE) {
-            when(request.method.toString()) {
-                "GET" -> {
-                    //val handler = server.routing.getGetHandler(request.uri)
-
-                }
-            }
-            // match uri
-            // call handler
-            // write response
             println("Request status is DONE:")
             println("Request method: ${request.method}")
             println("Request uri: ${request.uri}")
@@ -27,6 +18,26 @@ class Connection(
             for((name, value) in request.headers) {
                 println("Header [$name] -> [$value]")
             }
+
+            // match uri
+            // call handler
+            // write response
+            when(request.method.toString()) {
+                "GET" -> {
+                    val routing = Routing()
+                    server.routing.invoke(routing)
+
+                    val handler = routing.getGetHandler(request.uri.toString())
+
+                    handler(request, response)
+                }
+                else -> {
+                    throw IllegalStateException("Don't know how to handle request method: ${request.method}")
+                }
+            }
+
+            response.generateHeaders()
+            response.status = ResponseStatus.WRITING_HEADERS
         }
     }
 

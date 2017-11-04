@@ -24,6 +24,13 @@ class NewlineBuffer {
             buffer[(writePointer - 3 + 4) % 4] == '\n'.toByte() &&
             buffer[(writePointer - 4 + 4) % 4] == '\r'.toByte()
 
+    fun clear() {
+        buffer[0] = 0
+        buffer[1] = 0
+        buffer[2] = 0
+        buffer[3] = 0
+    }
+
 }
 
 enum class RequestStatus {
@@ -43,9 +50,9 @@ class Request(
     val buffer = Buffer()
     val newlineBuffer = NewlineBuffer()
     val headers: MutableMap<String, String> = HashMap()
-    val method = StringBuilder()
-    val uri = StringBuilder()
-    val httpVersion = StringBuilder()
+    var method = StringBuilder()
+    var uri = StringBuilder()
+    var httpVersion = StringBuilder()
     var headerName = StringBuilder()
     var headerValue = StringBuilder()
 
@@ -53,7 +60,14 @@ class Request(
 
     fun reset() {
         status = RequestStatus.READ_METHOD
-        buffer.clear()
+        buffer.reset()
+        newlineBuffer.clear()
+        headers.clear()
+        method = StringBuilder()
+        uri = StringBuilder()
+        httpVersion = StringBuilder()
+        headerName = StringBuilder()
+        headerValue = StringBuilder()
     }
 
     fun handleRead() {

@@ -74,7 +74,7 @@ class Routing {
 
     fun getGetHandler(uri: String): (Request, Response) -> Unit {
         return { _, response ->
-            response.write("Dummy handler invoked!")
+            response.write("Dummy handler invoked!\n")
         }
     }
 }
@@ -116,30 +116,58 @@ class Server(
 
                 try {
                     while (true) {
-                        val currentBlock = connection.request.getRequestBlock()
-                        //println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
+                        if (connection.request.status != RequestStatus.DONE) {
+                            val currentBlock = connection.request.getRequestBlock()
+                            //println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
 
-                        val bufferTest = currentBlock.data
-                        val pinned = bufferTest.pin()
+                            val bufferTest = currentBlock.data
+                            val pinned = bufferTest.pin()
 
-                        try {
-                            val length = read(pinned.addressOf(currentBlock.index), currentBlock.remaining().signExtend())
-                            currentBlock.bytesRead(length.toInt())
+                            try {
+                                val length = read(pinned.addressOf(currentBlock.index), currentBlock.remaining().signExtend())
+                                currentBlock.bytesRead(length.toInt())
 
-                            if (length == 0L) {
-                                break
+                                if (length == 0L) {
+                                    connection.reset()
+                                    break
+                                }
+
+                                connection.handleRead()
+                            } finally {
+                                pinned.unpin()
                             }
+                        }
 
-                            connection.handleRead()
+                        if (connection.response.status == ResponseStatus.WRITING_HEADERS) {
+                            val data = connection.response.consumeHeaders()
 
-                            if (connection.request.status == RequestStatus.DONE) {
-                                write(pinnedBytes.addressOf(0), connectionIdString.size.toLong())
-                                write(pinned.addressOf(0), length)
+                            if (data.length > 0) {
+                                val pinnedData = data.data.pin()
 
-                                connection.reset()
+                                try {
+                                    write(pinnedData.addressOf(data.offset), data.length.signExtend())
+                                    data.done(data.length)
+                                } finally {
+                                    pinnedData.unpin()
+                                }
                             }
-                        } finally {
-                            pinned.unpin()
+                        } else if (connection.response.status == ResponseStatus.WRITING_BODY) {
+                            val data = connection.response.consumeBody()
+
+                            if (data.length > 0) {
+                                val pinnedData = data.data.pin()
+
+                                try {
+                                    write(pinnedData.addressOf(data.offset), data.length.signExtend())
+                                    data.done(data.length)
+                                } finally {
+                                    pinnedData.unpin()
+                                }
+                            }
+                        }
+
+                        if (connection.response.status == ResponseStatus.DONE) {
+                            connection.reset()
                         }
                     }
                 } catch (e: IOException) {

@@ -16,8 +16,6 @@ class BufferBlock(
 
     fun canWrite() = data.isEmpty() || length < data.size
 
-    fun isFull() = !data.isEmpty() && length == data.size
-
     fun remaining() = data.size - length
 
     fun bytesRead(number: Int) {
@@ -60,6 +58,10 @@ class BufferBlock(
             return false
         }
     }
+
+    fun bytesConsumed(length: Int) {
+        index += length
+    }
 }
 
 object Buffers {
@@ -95,18 +97,27 @@ object Buffers {
     }
 }
 
+data class ConsumableBuffer(
+        val data: ByteArray,
+        val offset: Int,
+        val length: Int,
+        val done: (Int) -> Unit
+)
+
 class Buffer  {
     val blocks: MutableList<BufferBlock> = ArrayList()
     var currentReadBlock: Int = -1
     var currentWriteBlock: Int = -1
+    var length: Int = 0
 
-    fun clear() {
+    fun reset() {
         for (block in blocks) {
             Buffers.free(block)
         }
         blocks.clear()
         currentReadBlock = -1
         currentWriteBlock = -1
+        length = 0
     }
 
     fun currentReadBlock(): BufferBlock {
@@ -136,20 +147,32 @@ class Buffer  {
         return blocks[currentWriteBlock]
     }
 
-    fun canRead() = currentReadBlock >= 0 &&
-      (currentReadBlock < blocks.size - 1 || (currentReadBlock < blocks.size && currentReadBlock().canRead()))
+    fun canRead(): Boolean {
+        while (!currentReadBlock().canRead() && currentReadBlock < blocks.size - 1) {
+            currentReadBlock++
+        }
+
+        return currentReadBlock().canRead()
+    }
 
     fun canWrite() = currentWriteBlock == -1 || blocks[currentWriteBlock].canWrite() || Buffers.canClaim()
 
     fun read(): Int {
-        while(!currentReadBlock().canRead() && currentReadBlock < blocks.size - 1) {
-            currentReadBlock++
-        }
-
         if (canRead()) {
             return currentReadBlock().read()
         } else {
             return -1
+        }
+    }
+
+    fun consume(): ConsumableBuffer {
+        return if (canRead()) {
+            val crb = currentReadBlock()
+            ConsumableBuffer(crb.data, crb.index, crb.length - crb.index) { length ->
+                crb.bytesConsumed(length)
+            }
+        } else {
+            ConsumableBuffer(ByteArray(0), 0, 0, {})
         }
     }
 
@@ -167,8 +190,23 @@ class Buffer  {
 
         if (currentWriteBlock().canWrite()) {
             currentWriteBlock().write(value.toInt() and 0xff)
+            length++
         } else {
             throw IllegalStateException("Unable to write to buffer!")
+        }
+    }
+
+    fun write(bytes: ByteArray) {
+        for (byte in bytes) {
+            write(byte)
+        }
+    }
+
+    fun write(str: String) {
+        val array = kotlin.text.toUtf8Array(str, 0, str.length)
+
+        for (value in array) {
+            write(value)
         }
     }
 
