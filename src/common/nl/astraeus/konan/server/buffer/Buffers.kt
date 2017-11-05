@@ -3,8 +3,8 @@ package nl.astraeus.konan.server.buffer
 import kotlin.IllegalStateException
 
 val BUFFER_COUNT: Int = 1024
-val BUFFER_SIZE: Int = 8192
-val MINIMAL_REMAINING: Int = 512
+val BUFFER_SIZE: Int = 1024
+val MINIMAL_REMAINING: Int = 64
 
 class BufferBlock(
   var claimIndex: Int = 0,
@@ -17,6 +17,11 @@ class BufferBlock(
     fun canWrite() = data.isEmpty() || length < data.size
 
     fun remaining() = data.size - length
+
+    fun reset() {
+        index = 0
+        length = 0
+    }
 
     fun bytesRead(number: Int) {
         length += number
@@ -65,9 +70,9 @@ class BufferBlock(
 }
 
 object Buffers {
-    val claimList: Array<BufferBlock> = Array(BUFFER_COUNT, { BufferBlock() })
+    val claimList: Array<BufferBlock?> = Array(BUFFER_COUNT, { null })
     var claimCount: Int = 0
-    val freeList: Array<BufferBlock> = Array(BUFFER_COUNT, { BufferBlock() })
+    val freeList: Array<BufferBlock?> = Array(BUFFER_COUNT, { null })
     var freeCount: Int = BUFFER_COUNT
 
     fun canClaim() = true
@@ -78,18 +83,19 @@ object Buffers {
                 val size = claimList.size
                 val newSize = size * 2
 
-                val newClaimList = Array(newSize, { BufferBlock() })
-                val newFreeList = Array(newSize, { BufferBlock() })
+                val newClaimList = Array<BufferBlock?>(newSize, { null })
+                val newFreeList = Array<BufferBlock?>(newSize, { null })
 
                 TODO("Grow buffer list when full.")
             }
 
-            val buffer = freeList[--freeCount]
+            val buffer = freeList[--freeCount] ?: BufferBlock()
             buffer.claimIndex = claimCount
             claimList[claimCount++] = buffer
 
             println("CLAIM: claimed: $claimCount, free: $freeCount, claimIndex: ${buffer.claimIndex}")
 
+            buffer.reset()
             buffer
         }
     }
@@ -99,6 +105,7 @@ object Buffers {
             freeList[freeCount++] = claimList[bufferBlock.claimIndex]
             claimList[bufferBlock.claimIndex] = claimList[claimCount - 1]
             claimCount--
+            bufferBlock.reset()
 
             println("FREE: claimed: $claimCount, free: $freeCount, claimIndex: ${bufferBlock.claimIndex}")
         }
@@ -108,8 +115,7 @@ object Buffers {
 data class ConsumableBuffer(
         val data: ByteArray,
         val offset: Int,
-        val length: Int,
-        val done: (Int) -> Unit
+        val length: Int
 )
 
 class Buffer  {
@@ -176,11 +182,11 @@ class Buffer  {
     fun consume(): ConsumableBuffer {
         return if (canRead()) {
             val crb = currentReadBlock()
-            ConsumableBuffer(crb.data, crb.index, crb.length - crb.index) { length ->
-                crb.bytesConsumed(length)
-            }
+            val result = ConsumableBuffer(crb.data, crb.index, crb.length - crb.index)
+            crb.bytesConsumed(crb.length - crb.index)
+            result
         } else {
-            ConsumableBuffer(ByteArray(0), 0, 0, {})
+            ConsumableBuffer(ByteArray(0), 0, 0)
         }
     }
 

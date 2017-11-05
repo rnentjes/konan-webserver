@@ -118,7 +118,7 @@ class Server(
                     while (true) {
                         if (connection.request.status != RequestStatus.DONE) {
                             val currentBlock = connection.request.getRequestBlock()
-                            //println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
+                            println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
 
                             val bufferTest = currentBlock.data
                             val pinned = bufferTest.pin()
@@ -146,7 +146,6 @@ class Server(
 
                                 try {
                                     write(pinnedData.addressOf(data.offset), data.length.signExtend())
-                                    data.done(data.length)
                                 } finally {
                                     pinnedData.unpin()
                                 }
@@ -159,7 +158,6 @@ class Server(
 
                                 try {
                                     write(pinnedData.addressOf(data.offset), data.length.signExtend())
-                                    data.done(data.length)
                                 } finally {
                                     pinnedData.unpin()
                                 }
@@ -174,6 +172,8 @@ class Server(
                     println("I/O error occured: ${e.message}")
                 } finally {
                     pinnedBytes.unpin()
+
+                    connection.reset()
                 }
             }
         }

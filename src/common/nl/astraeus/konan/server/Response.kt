@@ -20,6 +20,8 @@ class Response(
     fun reset() {
         status = ResponseStatus.WAITING_FOR_REQUEST
         bodyData.reset()
+        headerData.reset()
+        headers.clear()
     }
 
     fun setHeader(name: String, value: String) {
@@ -37,6 +39,7 @@ class Response(
     fun sendError(code: Int, msg: String) {
         bodyData.reset()
         headerData.reset()
+        headers.clear()
 
         // write error data
     }
