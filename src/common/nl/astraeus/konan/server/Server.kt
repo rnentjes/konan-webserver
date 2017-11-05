@@ -73,8 +73,8 @@ class Routing {
     }
 
     fun getGetHandler(uri: String): (Request, Response) -> Unit {
-        return { _, response ->
-            response.write("Dummy handler invoked!\n")
+        return getHandlers[uri] ?: { _, response ->
+            response.sendError(404, "Page not found")
         }
     }
 }

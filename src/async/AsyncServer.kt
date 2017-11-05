@@ -35,24 +35,38 @@ fun main(args: Array<String>) {
         return
     }
 
-    val port = args[0].toShort()
+    var port = args[0].toShort()
     val controller = Controller()
+    var started = false
 
-    val server = Server(port) {
-        get("/") { _, response ->
-            response.write("Hello world!")
-        }
+    while (!started) {
+        try {
+            val server = Server(port) {
+                get("/hello") { _, response ->
+                    response.write("Hello world!")
+                }
 
-        post("/data", ::postData)
+                get("/pipo") { _, response ->
+                    response.write("Hello pipo!")
+                }
 
-        post("/post", controller::getData)
+                post("/data", ::postData)
 
-        ws("/ws") {
-            onMessage { msg ->
-                println("Websocker received: $msg")
+                post("/post", controller::getData)
+
+                ws("/ws") {
+                    onMessage { msg ->
+                        println("Websocker received: $msg")
+                    }
+                }
             }
+
+            println("Starting server on port: $port")
+            server.start()
+            started = true
+        } catch (e: Error) {
+            println("Failed to start server on port: $port")
+            port++
         }
     }
-
-    server.start()
 }
