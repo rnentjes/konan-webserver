@@ -43,11 +43,16 @@ fun main(args: Array<String>) {
         try {
             val server = Server(port) {
                 get("/hello") { _, response ->
-                    response.write("Hello world!")
+                    response.write("<html><body><h1>Hello wörld!</h1></body></html>")
                 }
 
                 get("/pipo") { _, response ->
-                    response.write("Hello pipo!")
+                    response.setHeader("content-type", "text/plain; charset=UTF-8")
+                    response.write("Hello pipö!")
+                }
+
+                get("/*") { _, response ->
+                    response.write("Generic handler called...")
                 }
 
                 post("/data", ::postData)

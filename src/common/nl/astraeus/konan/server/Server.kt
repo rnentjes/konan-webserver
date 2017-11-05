@@ -73,9 +73,44 @@ class Routing {
     }
 
     fun getGetHandler(uri: String): (Request, Response) -> Unit {
-        return getHandlers[uri] ?: { _, response ->
+        return matchUri(uri, getHandlers) ?: { _, response ->
             response.sendError(404, "Page not found")
         }
+    }
+
+    fun <T> matchUri(uri: String, map: Map<String, T>): T? {
+        return map[uri] ?: {
+            val resultMap: MutableMap<String, T> = HashMap(map)
+            var index = 0
+            while(resultMap.size > 1 && index < uri.length) {
+                for ((name, value) in resultMap) {
+                    if (name.length > index && uri.length > index && name[index] != uri[index] && name.last() != '*') {
+                        println("Remove [$index]-$name")
+                        resultMap.remove(name)
+                    } else if (name.last() != '*' && index > name.length) {
+                        println("Remove [$index]-$name")
+                        resultMap.remove(name)
+                    }
+                }
+                index++
+            }
+
+            if (resultMap.size == 1) {
+                resultMap.entries.first().value
+            } else {
+                var result: T? = null
+                var longest = 0
+
+                for ((name, value) in resultMap) {
+                    if (name.length > longest) {
+                        result = value
+                        longest = name.length
+                    }
+                }
+
+                result
+            }
+        }()
     }
 }
 
