@@ -3,11 +3,10 @@ package nl.astraeus.konan.server.buffer
 import kotlin.IllegalStateException
 
 val BUFFER_COUNT: Int = 1024
-val BUFFER_SIZE: Int = 1024
+val BUFFER_SIZE: Int = 8192
 val MINIMAL_REMAINING: Int = 64
 
 class BufferBlock(
-  var claimIndex: Int = 0,
   var data: ByteArray = ByteArray(0),
   var index: Int = 0,
   var length: Int = 0
@@ -27,14 +26,14 @@ class BufferBlock(
         length += number
 
         if (length > data.size) {
-            println("Buffer size: ${data.size}, remaining(): ${remaining()}, bytes read: $number, length: $length")
+            // println("Buffer size: ${data.size}, remaining(): ${remaining()}, bytes read: $number, length: $length")
             throw IllegalStateException("To many bytes where read!?")
         }
     }
 
     fun allocate() {
         if (data.isEmpty()) {
-            println("Allocating buffer!")
+            // println("Allocating buffer!")
             data = ByteArray(BUFFER_SIZE)
         }
     }
@@ -64,14 +63,33 @@ class BufferBlock(
         }
     }
 
+    fun write(array: ByteArray, offset: Int, length: Int): Int {
+        allocate()
+
+        if (remaining() == 0) {
+            return 0
+        } else {
+            val remaining = remaining()
+            if (length <= remaining) {
+                array.copyRangeTo(data, offset, offset + length, this.length)
+                this.length += length
+
+                return length
+            } else {
+                array.copyRangeTo(data, offset, offset + remaining, this.length)
+                this.length += remaining
+
+                return remaining
+            }
+        }
+    }
+
     fun bytesConsumed(length: Int) {
         index += length
     }
 }
 
 object Buffers {
-    val claimList: Array<BufferBlock?> = Array(BUFFER_COUNT, { null })
-    var claimCount: Int = 0
     val freeList: Array<BufferBlock?> = Array(BUFFER_COUNT, { null })
     var freeCount: Int = BUFFER_COUNT
 
@@ -80,34 +98,29 @@ object Buffers {
     fun claim(): BufferBlock {
         return synchronized(this) {
             if (freeCount == 0) {
-                val size = claimList.size
+                val size = freeList.size
                 val newSize = size * 2
 
-                val newClaimList = Array<BufferBlock?>(newSize, { null })
                 val newFreeList = Array<BufferBlock?>(newSize, { null })
 
                 TODO("Grow buffer list when full.")
             }
 
-            val buffer = freeList[--freeCount] ?: BufferBlock()
-            buffer.claimIndex = claimCount
-            claimList[claimCount++] = buffer
+            val bufferBlock = freeList[--freeCount] ?: BufferBlock()
+            bufferBlock.reset()
 
-            println("CLAIM: claimed: $claimCount, free: $freeCount, claimIndex: ${buffer.claimIndex}")
+            println("CLAIM: free: $freeCount")
 
-            buffer.reset()
-            buffer
+            bufferBlock
         }
     }
 
     fun free(bufferBlock: BufferBlock) {
         synchronized(this) {
-            freeList[freeCount++] = claimList[bufferBlock.claimIndex]
-            claimList[bufferBlock.claimIndex] = claimList[claimCount - 1]
-            claimCount--
+            freeList[freeCount++] = bufferBlock
             bufferBlock.reset()
 
-            println("FREE: claimed: $claimCount, free: $freeCount, claimIndex: ${bufferBlock.claimIndex}")
+            println("FREE: free: $freeCount")
         }
     }
 }
@@ -180,30 +193,24 @@ class Buffer  {
     }
 
     fun consume(): ConsumableBuffer {
-        return if (canRead()) {
-            val crb = currentReadBlock()
-            val result = ConsumableBuffer(crb.data, crb.index, crb.length - crb.index)
-            crb.bytesConsumed(crb.length - crb.index)
-            result
-        } else {
-            ConsumableBuffer(ByteArray(0), 0, 0)
+        var result = ConsumableBuffer(ByteArray(0), 0, 0)
+
+        synchronized(this) {
+            if (canRead()) {
+                val crb = currentReadBlock()
+                result = ConsumableBuffer(crb.data, crb.index, crb.length - crb.index)
+                crb.bytesConsumed(crb.length - crb.index)
+            }
         }
+
+        return result
     }
 
     fun write(value: Byte) {
-        if (currentWriteBlock == -1) {
-            blocks.add(Buffers.claim())
-            currentWriteBlock = 0
-            currentReadBlock = 0
-        }
+        val currentBlock = currentWriteBlock(true)
 
-        if (!currentWriteBlock().canWrite()) {
-            blocks.add(Buffers.claim())
-            currentWriteBlock++
-        }
-
-        if (currentWriteBlock().canWrite()) {
-            currentWriteBlock().write(value.toInt() and 0xff)
+        if (currentBlock.canWrite()) {
+            currentBlock.write(value.toInt() and 0xff)
             length++
         } else {
             throw IllegalStateException("Unable to write to buffer!")
@@ -211,15 +218,20 @@ class Buffer  {
     }
 
     fun write(bytes: ByteArray, offset: Int, length: Int) {
-        for (index in offset until (offset+length)) {
-            write(bytes[index])
+        var remaining = length
+
+        while(remaining > 0) {
+            val currentBlock = currentWriteBlock(true)
+
+            val written = currentBlock.write(bytes, offset, length)
+            this.length += written
+            remaining -= written
         }
+
     }
 
     fun write(bytes: ByteArray) {
-        for (byte in bytes) {
-            write(byte)
-        }
+        write(bytes, 0, bytes.size)
     }
 
     fun write(str: String) {

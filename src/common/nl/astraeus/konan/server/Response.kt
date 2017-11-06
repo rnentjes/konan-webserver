@@ -33,8 +33,8 @@ class Response(
     }
 
     fun generateHeaders() = if (responseCode == 200) {
-        headerData.write("HTTP/1.1 200\r\n")
-        headerData.write("OK\r\n")
+        println("generate headers, body length: ${bodyData.length}")
+        headerData.write("HTTP/1.1 200 OK\r\n")
         headerData.write("content-type: ${headers["content-type"] ?: "text/html; charset=UTF-8"}\r\n")
         headerData.write("content-length: ${bodyData.length}\r\n")
         for ((name, value) in headers) {

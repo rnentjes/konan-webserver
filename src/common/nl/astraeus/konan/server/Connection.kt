@@ -11,6 +11,7 @@ class Connection(
         request.handleRead()
 
         if (request.status == RequestStatus.DONE) {
+/*
             println("Request status is DONE:")
             println("Request method: ${request.method}")
             println("Request uri: ${request.uri}")
@@ -18,6 +19,7 @@ class Connection(
             for((name, value) in request.headers) {
                 println("Header [$name] -> [$value]")
             }
+*/
 
             // match uri
             // call handler

@@ -84,13 +84,13 @@ class Routing {
 
             for ((name, value) in resultMap) {
                 if (uri.length > name.length && !name.endsWith('*')) {
-                    println("Remove 1 [$uri] - [$name]")
+                    // println("Remove 1 [$uri] - [$name]")
                     resultMap.remove(name)
                 } else if (name.endsWith('*') && !uri.startsWith(name.slice(0 until name.length-1))) {
-                    println("Remove 2 [$uri] - [$name]")
+                    // println("Remove 2 [$uri] - [$name]")
                     resultMap.remove(name)
                 } else if (name.length >= uri.length) {
-                    println("Remove 3 [$uri] - [$name]")
+                    // println("Remove 3 [$uri] - [$name]")
                     resultMap.remove(name)
                 }
             }
@@ -153,7 +153,7 @@ class Server(
                     while (true) {
                         if (connection.request.status != RequestStatus.DONE) {
                             val currentBlock = connection.request.getRequestBlock()
-                            println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
+                            // println("#$connectionId remaining in current block: ${currentBlock.remaining()}")
 
                             val bufferTest = currentBlock.data
                             val pinned = bufferTest.pin()
@@ -204,7 +204,7 @@ class Server(
                         }
                     }
                 } catch (e: IOException) {
-                    println("I/O error occured: ${e.message}")
+                    println("I/O error occured: ${e.message}\n\n$e")
                 } finally {
                     pinnedBytes.unpin()
 
