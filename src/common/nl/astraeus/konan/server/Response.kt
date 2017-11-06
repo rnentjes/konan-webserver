@@ -58,6 +58,10 @@ class Response(
         responseMessage = msg
     }
 
+    fun write(bytes: ByteArray, offset: Int, length: Int) {
+        bodyData.write(bytes, offset, length)
+    }
+
     fun write(bytes: ByteArray) {
         bodyData.write(bytes)
     }

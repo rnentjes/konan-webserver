@@ -81,18 +81,18 @@ class Routing {
     fun <T> matchUri(uri: String, map: Map<String, T>): T? {
         return map[uri] ?: {
             val resultMap: MutableMap<String, T> = HashMap(map)
-            var index = 0
-            while(resultMap.size > 1 && index < uri.length) {
-                for ((name, value) in resultMap) {
-                    if (name.length > index && uri.length > index && name[index] != uri[index] && name.last() != '*') {
-                        println("Remove [$index]-$name")
-                        resultMap.remove(name)
-                    } else if (name.last() != '*' && index > name.length) {
-                        println("Remove [$index]-$name")
-                        resultMap.remove(name)
-                    }
+
+            for ((name, value) in resultMap) {
+                if (uri.length > name.length && !name.endsWith('*')) {
+                    println("Remove 1 [$uri] - [$name]")
+                    resultMap.remove(name)
+                } else if (name.endsWith('*') && !uri.startsWith(name.slice(0 until name.length-1))) {
+                    println("Remove 2 [$uri] - [$name]")
+                    resultMap.remove(name)
+                } else if (name.length >= uri.length) {
+                    println("Remove 3 [$uri] - [$name]")
+                    resultMap.remove(name)
                 }
-                index++
             }
 
             if (resultMap.size == 1) {

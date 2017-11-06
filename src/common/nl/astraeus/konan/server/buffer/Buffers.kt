@@ -210,6 +210,12 @@ class Buffer  {
         }
     }
 
+    fun write(bytes: ByteArray, offset: Int, length: Int) {
+        for (index in offset until (offset+length)) {
+            write(bytes[index])
+        }
+    }
+
     fun write(bytes: ByteArray) {
         for (byte in bytes) {
             write(byte)

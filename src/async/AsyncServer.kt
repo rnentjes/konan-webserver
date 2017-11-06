@@ -14,9 +14,18 @@
  * limitations under the License.
  */
 
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.pin
+import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.signExtend
 import nl.astraeus.konan.server.Server
 import nl.astraeus.konan.server.Request
 import nl.astraeus.konan.server.Response
+import nl.astraeus.konan.server.buffer.Buffers
+import platform.posix.fclose
+import platform.posix.fopen
+import platform.posix.fread
+import platform.posix.nrand48
 
 class Controller {
 
@@ -27,6 +36,33 @@ class Controller {
 
 fun postData(request: Request, response: Response) {
 
+}
+
+fun fileHandler(request: Request, response: Response) {
+    val filename = "web${request.uri}"
+    println("reading file: $filename")
+
+    val file = fopen(filename, "r")
+
+    if (file == null) {
+        response.sendError(404, "File not found")
+    } else {
+        val block = Buffers.claim()
+        val pinned = block.data.pin()
+        try {
+            var nr: Long
+
+            do {
+                nr = fread(pinned.addressOf(0), block.data.size.signExtend(), 1, file)
+
+                response.write(block.data, 0, nr.toInt())
+            } while (nr > 0L)
+        } finally {
+            pinned.unpin()
+            Buffers.free(block)
+            fclose(file)
+        }
+    }
 }
 
 fun main(args: Array<String>) {
@@ -51,9 +87,7 @@ fun main(args: Array<String>) {
                     response.write("Hello pipö!")
                 }
 
-                get("/*") { _, response ->
-                    response.write("Generic handler called...")
-                }
+                get("/*", ::fileHandler)
 
                 post("/data", ::postData)
 
